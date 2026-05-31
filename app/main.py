@@ -26,6 +26,8 @@ MEDIA_DIR = os.environ.get("MEDIA_DIR", "/storage/music")
 COVERS_DIR = os.environ.get("COVERS_DIR", "/storage/covers")
 BASE_URL = os.environ.get("BASE_URL", "https://mixtape.janhellion.com")
 
+SHORT_URL_BASE = os.environ.get("SHORT_URL_BASE", "https://s.janhellion.com")
+
 # ─── SMTP Config ─────────────────────────────────────────────
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.ionos.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
@@ -266,7 +268,7 @@ async def upload_mixtape(
 
     # Create short link
     short_code = create_short_link(share_id)
-    short_url = f"{BASE_URL}/s/{short_code}"
+    short_url = f"{SHORT_URL_BASE}/{short_code}"
 
     # Send email notification if requested
     if notify_email:
