@@ -258,6 +258,7 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
   display: flex;
   flex-direction: column;
   gap: 0;
+  min-height: 0;
 }
 
 .player-left {
@@ -266,6 +267,8 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
 
 .player-right {
   flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* ─── Error / Passcode ─── */
@@ -602,6 +605,9 @@ footer { text-align: center; padding: 1.5rem; color: var(--text-muted); font-siz
     width: 90vw;
     max-width: 330px;
     height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     max-height: 700px;
     background: linear-gradient(170deg, #f5f5f5 0%, #e8e8e8 40%, #d8d8d8 100%);
     border-radius: 16px;
@@ -653,7 +659,7 @@ footer { text-align: center; padding: 1.5rem; color: var(--text-muted); font-siz
   .progress-fill { background: #888; }
   .control-btn {
     background: none; border: none; color: #ddd;
-    font-size: 1rem; padding: 0.15rem 0.3rem; backdrop-filter: none;
+    font-size: 0.85rem; padding: 0.15rem 0.25rem; backdrop-filter: none;
   }
   .control-btn:hover { transform: none; background: none; }
   .play-btn {
