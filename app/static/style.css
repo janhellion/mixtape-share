@@ -259,6 +259,7 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
   flex-direction: column;
   gap: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .player-left {
@@ -619,7 +620,8 @@ footer { text-align: center; padding: 1.5rem; color: var(--text-muted); font-siz
   }
 
   .player-layout {
-    height: 100%;
+    flex: 1;
+    min-height: 0;
   }
 
   .player-right {
