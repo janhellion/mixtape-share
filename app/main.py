@@ -72,17 +72,19 @@ def scan_audio(dir_path):
 
             if tags is not None:
                 if isinstance(tags, dict):
-                    title = str(tags.get("title", [""])[0]) if tags.get("title") and tags["title"][0] else ""
-                    artist = str(tags.get("artist", [""])[0]) if tags.get("artist") and tags["artist"][0] else ""
+                    title = tags.get("title", [""])[0] if tags.get("title") and tags["title"][0] else ""
+                    artist = tags.get("artist", [""])[0] if tags.get("artist") and tags["artist"][0] else ""
                 elif hasattr(tags, "get"):
-                    # Handle EasyID3, MP4, etc.
-                    title = str(tags.get("title", ""))
-                    artist = str(tags.get("artist", ""))
-                    # Some formats return lists
-                    if isinstance(title, list):
-                        title = str(title[0]) if title else ""
-                    if isinstance(artist, list):
-                        artist = str(artist[0]) if artist else ""
+                    title = tags.get("title", "")
+                    artist = tags.get("artist", "")
+
+            # Normalize: tags often return lists like ['Los Tres']
+            if isinstance(title, list):
+                title = str(title[0]) if title else ""
+            if isinstance(artist, list):
+                artist = str(artist[0]) if artist else ""
+            title = str(title) if title else ""
+            artist = str(artist) if artist else ""
 
             if not title:
                 title = f.stem
