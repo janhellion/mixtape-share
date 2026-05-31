@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  mixtape-share:
+    build: .
+    container_name: mixtape_platform
+    ports:
+      - "8081:8000"
+    volumes:
+      - ./storage:/storage
+    environment:
+      - DATABASE_URL=sqlite:////storage/app.db
+      - MEDIA_DIR=/storage/music
+      - COVERS_DIR=/storage/covers
+      - BASE_URL=http://mixtape.janhellion.com
+    restart: unless-stopped

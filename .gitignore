@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.db
+storage/music/*
+storage/covers/*
+!storage/music/.gitkeep
+!storage/covers/.gitkeep
+.DS_Store

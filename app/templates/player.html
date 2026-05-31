@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if share %}{{ share.name }}{% else %}Mixtape{% endif %}</title>
+<link rel="stylesheet" href="/static/style.css">
+{% if share and share.cover_path %}
+<style>
+  .player-bg { background-image: url('{{ share.cover_path }}'); }
+</style>
+{% endif %}
+{% if accent_color %}
+<style>
+  :root { --accent: {{ accent_color }}; --accent-hover: {{ accent_color }}; }
+  .track-item.active { background: {{ accent_color }}12; }
+  .track-item.active .track-title { color: {{ accent_color }}; }
+  .progress-fill { background: {{ accent_color }}; }
+  .volume-area input[type="range"] { accent-color: {{ accent_color }}; }
+</style>
+{% endif %}
+</head>
+<body class="player-page">
+  {% if error %}
+  <div class="error-state">
+    <h1>📼</h1>
+    <h2>Mixtape not found</h2>
+    <p>This link doesn't exist or has expired.</p>
+  </div>
+  {% elif share and share.passcode %}
+  <div id="passcodeScreen" class="passcode-screen">
+    <div class="passcode-box">
+      <h1>📼</h1>
+      <h2>{{ share.name }}</h2>
+      <p>This mixtape is protected</p>
+      <input type="text" id="passcodeInput" placeholder="Enter passcode" autofocus>
+      <button onclick="verifyPasscode('{{ share.id }}')" class="btn-primary">Unlock</button>
+      <p id="passcodeError" class="error-msg hidden">Incorrect passcode</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div id="playerMain" class="{% if share and share.passcode %}hidden{% endif %}">
+    <div class="player-bg-overlay"></div>
+    <div class="player-container">
+      <!-- Header -->
+      <div class="player-header">
+        {% if share and share.cover_path %}
+        <img src="{{ share.cover_path }}" class="player-cover" id="coverArt">
+        {% else %}
+        <div class="player-cover player-cover-placeholder">📼</div>
+        {% endif %}
+        <div class="player-info">
+          <h1 id="mixtapeName">{{ share.name if share else '' }}</h1>
+          <p class="track-count" id="mixtapeMeta">{{ tracks|length }} tracks</p>
+        </div>
+      </div>
+
+      <!-- Audio Player -->
+      <div class="audio-player-bar">
+        <button id="prevBtn" onclick="prevTrack()" class="control-btn">⏮</button>
+        <button id="playBtn" onclick="togglePlay()" class="control-btn play-btn">▶</button>
+        <button id="nextBtn" onclick="nextTrack()" class="control-btn">⏭</button>
+        <div class="progress-area">
+          <span id="currentTime">0:00</span>
+          <div class="progress-bar" id="progressBar" onclick="seek(event)">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <span id="totalTime">0:00</span>
+        </div>
+        <div class="volume-area">
+          <span>🔊</span>
+          <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.8" oninput="setVolume(this.value)">
+        </div>
+      </div>
+
+      <!-- Tracklist -->
+      <div class="tracklist" id="tracklist">
+        {% for track in tracks %}
+        <div class="track-item" data-index="{{ loop.index0 }}" data-filename="{{ track.filename }}" onclick="playTrack({{ loop.index0 }})">
+          <span class="track-num">{{ loop.index }}</span>
+          <div class="track-info">
+            <span class="track-title">{{ track.title }}</span>
+            <span class="track-artist">{{ track.artist }}</span>
+          </div>
+          <span class="track-duration">{{ track.duration | format_duration }}</span>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Footer -->
+      <div class="player-footer">
+        <a href="/api/download/{{ share.id }}" class="download-btn" onclick="trackDownload()">⬇ Download Tape</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden audio element -->
+  <audio id="audioPlayer" preload="auto"></audio>
+
+<script>
+// ─── State ───
+var tracks = {{ tracks | tojson }};
+var currentIndex = 0;
+var audio = document.getElementById('audioPlayer');
+
+// ─── Init ───
+if (tracks.length > 0) {
+  loadTrack(0);
+  document.querySelectorAll('.track-item')[0]?.classList.add('active');
+}
+
+audio.addEventListener('ended', function() { nextTrack(); });
+audio.addEventListener('timeupdate', updateProgress);
+audio.addEventListener('loadedmetadata', function() {
+  document.getElementById('totalTime').textContent = formatTime(audio.duration);
+});
+
+// ─── Controls ───
+function loadTrack(index) {
+  if (index < 0 || index >= tracks.length) return;
+  currentIndex = index;
+  var t = tracks[index];
+  audio.src = '/api/stream/{{ share.id }}/' + encodeURIComponent(t.filename);
+  audio.load();
+
+  // Update UI
+  document.querySelectorAll('.track-item').forEach(function(el) { el.classList.remove('active'); });
+  var items = document.querySelectorAll('.track-item');
+  if (items[index]) items[index].classList.add('active');
+  items[index]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Log play
+  if (t.id) {
+    fetch('/api/share/{{ share.id }}/play/' + t.id, { method: 'POST' });
+  }
+}
+
+function playTrack(index) {
+  if (index === currentIndex && !audio.paused) return;
+  loadTrack(index);
+  audio.play().then(function() {
+    document.getElementById('playBtn').textContent = '⏸';
+  }).catch(function() {});
+}
+
+function togglePlay() {
+  if (audio.paused) {
+    if (!audio.src) loadTrack(0);
+    audio.play().then(function() {
+      document.getElementById('playBtn').textContent = '⏸';
+    });
+  } else {
+    audio.pause();
+    document.getElementById('playBtn').textContent = '▶';
+  }
+}
+
+function nextTrack() {
+  if (currentIndex < tracks.length - 1) playTrack(currentIndex + 1);
+  else { audio.pause(); document.getElementById('playBtn').textContent = '▶'; }
+}
+
+function prevTrack() {
+  if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+  if (currentIndex > 0) playTrack(currentIndex - 1);
+}
+
+function seek(e) {
+  var bar = document.getElementById('progressBar');
+  var rect = bar.getBoundingClientRect();
+  var pct = (e.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+}
+
+function setVolume(val) { audio.volume = parseFloat(val); }
+
+function updateProgress() {
+  if (audio.duration) {
+    var pct = (audio.currentTime / audio.duration) * 100;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('currentTime').textContent = formatTime(audio.currentTime);
+  }
+}
+
+function formatTime(s) {
+  if (isNaN(s) || s < 0) return '0:00';
+  var m = Math.floor(s / 60);
+  var sec = Math.floor(s % 60);
+  return m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
+function trackDownload() {
+  fetch('/api/share/{{ share.id }}/play/0', { method: 'POST' });
+}
+
+// ─── Passcode ───
+async function verifyPasscode(id) {
+  var pc = document.getElementById('passcodeInput').value;
+  var r = await fetch('/api/share/' + id + '/verify', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({passcode: pc})
+  });
+  var d = await r.json();
+  if (d.valid) {
+    document.getElementById('passcodeScreen').classList.add('hidden');
+    document.getElementById('playerMain').classList.remove('hidden');
+  } else {
+    document.getElementById('passcodeError').classList.remove('hidden');
+  }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowRight') nextTrack();
+  if (e.code === 'ArrowLeft') prevTrack();
+});
+</script>
+</body>
+</html>

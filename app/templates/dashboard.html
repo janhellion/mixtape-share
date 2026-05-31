@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mixtape Share — Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dashboard">
+  <header>
+    <h1>📼 Mixtape Share</h1>
+    <div class="header-actions">
+      <span id="serverStatus" class="status-dot">●</span>
+      <button onclick="showUpload()" class="btn-primary">+ New Mixtape</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="modal hidden">
+      <div class="modal-content">
+        <span class="close" onclick="hideUpload()">&times;</span>
+        <h2>Create New Mixtape</h2>
+        <form id="uploadForm" onsubmit="uploadMixtape(event)">
+          <div class="form-group">
+            <label>Mixtape Name</label>
+            <input type="text" name="name" required placeholder="Summer Vibes 2026..." autofocus>
+          </div>
+          <div class="form-group">
+            <label>Cover Image (optional)</label>
+            <div class="cover-upload-row">
+              <input type="file" name="cover" accept=".png,.jpg,.jpeg,.gif,.webp" id="coverInput" onchange="previewCover(event)">
+              <img id="coverPreview" class="cover-preview">
+            </div>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">If you upload a JPG/PNG with the audio files, it'll be auto-detected as the cover.</p>
+          </div>
+          <div class="form-group">
+            <label>Passcode (optional)</label>
+            <input type="text" name="passcode" placeholder="Leave empty for public">
+          </div>
+          <div class="form-group">
+            <label>Files</label>
+            <div class="dropzone" id="dropzone">
+              <p>Drop audio files or a ZIP here, or click to browse</p>
+              <input type="file" name="files" multiple accept=".mp3,.flac,.ogg,.wav,.m4a,.zip,.png,.jpg,.jpeg,.gif" style="display:none" id="fileInput">
+              <div id="filePreview" class="file-preview"></div>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="uploadBtn">Create Mixtape</button>
+          <div id="uploadProgress" class="hidden">Uploading and processing...</div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Share List -->
+    <section id="shareList">
+      <div class="list-header">
+        <span class="col-name">Mixtape</span>
+        <span class="col-tracks">Tracks</span>
+        <span class="col-downloads">Downloads</span>
+        <span class="col-created">Created</span>
+        <span class="col-actions">Actions</span>
+      </div>
+      <div id="shareItems">
+        {% for share in shares %}
+        <div class="share-item" data-id="{{ share.id }}">
+          <span class="col-name">
+            {% if share.cover_path %}
+            <img src="{{ share.cover_path }}" class="mini-cover">
+            {% endif %}
+            <strong>{{ share.name }}</strong>
+          </span>
+          <span class="col-tracks">{{ share.track_count }}</span>
+          <span class="col-downloads">{{ share.download_count }}</span>
+          <span class="col-created">{{ share.created_at | int | timestamp_to_date }}</span>
+          <span class="col-actions">
+            <button onclick="copyLink('{{ base_url }}/share/{{ share.id }}')" title="Copy link">🔗</button>
+            <button onclick="showQR('{{ base_url }}/share/{{ share.id }}')" title="QR Code">📱</button>
+            <button onclick="deleteShare('{{ share.id }}')" class="btn-danger" title="Delete">🗑</button>
+          </span>
+        </div>
+        {% endfor %}
+        {% if shares|length == 0 %}
+        <div class="empty-state">
+          <p>No mixtapes yet. Click "+ New Mixtape" to create your first one.</p>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <!-- QR Modal -->
+    <div id="qrModal" class="modal hidden">
+      <div class="modal-content qr-content">
+        <span class="close" onclick="hideQR()">&times;</span>
+        <h2>Share QR Code</h2>
+        <div id="qrContainer"></div>
+        <p id="qrLink" class="qr-link"></p>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>mixtape.janhellion.com</p>
+  </footer>
+
+<script>
+function previewCover(e) {
+  var file = e.target.files[0];
+  if (file) {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var preview = document.getElementById('coverPreview');
+      preview.src = ev.target.result;
+      preview.classList.add('show');
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function showUpload() { document.getElementById('uploadModal').classList.remove('hidden'); }
+function hideUpload() { document.getElementById('uploadModal').classList.add('hidden'); }
+function showQR(url) {
+  document.getElementById('qrModal').classList.remove('hidden');
+  document.getElementById('qrLink').textContent = url;
+  document.getElementById('qrContainer').innerHTML = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url) + '" alt="QR Code">';
+}
+function hideQR() { document.getElementById('qrModal').classList.add('hidden'); }
+
+// Dropzone with folder support
+document.addEventListener('DOMContentLoaded', function() {
+  var dz = document.getElementById('dropzone');
+  var fi = document.getElementById('fileInput');
+
+  dz.addEventListener('click', function() { fi.click(); });
+  dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', function() { dz.classList.remove('dragover'); });
+
+  // Walk a directory entry recursively and collect files
+  function walkEntry(entry, path, fileList) {
+    return new Promise(function(resolve) {
+      if (entry.isFile) {
+        entry.file(function(file) {
+          file.relativePath = path + file.name;
+          fileList.push(file);
+          resolve();
+        });
+      } else if (entry.isDirectory) {
+        var dirReader = entry.createReader();
+        dirReader.readEntries(function(entries) {
+          var promises = entries.map(function(e) { return walkEntry(e, path + entry.name + '/', fileList); });
+          Promise.all(promises).then(resolve);
+        });
+      } else {
+        resolve();
+      }
+    });
+  }
+
+  dz.addEventListener('drop', function(e) {
+    e.preventDefault(); dz.classList.remove('dragover');
+    var items = e.dataTransfer.items;
+    var allFiles = [];
+
+    if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+      // Folder drop supported — walk directory trees
+      var promises = [];
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry();
+        if (entry) {
+          promises.push(walkEntry(entry, '', allFiles));
+        }
+      }
+      Promise.all(promises).then(function() {
+        fi.files = null; // Can't set FileList, so we store on window
+        window._droppedFiles = allFiles;
+        updateFilePreview();
+      });
+    } else {
+      // Fallback: just use files
+      for (var i = 0; i < e.dataTransfer.files.length; i++) {
+        allFiles.push(e.dataTransfer.files[i]);
+      }
+      window._droppedFiles = allFiles;
+      updateFilePreview();
+    }
+  });
+
+  fi.addEventListener('change', function() {
+    window._droppedFiles = null;
+    updateFilePreview();
+  });
+
+  function updateFilePreview() {
+    var pv = document.getElementById('filePreview');
+    pv.innerHTML = '';
+    var files = window._droppedFiles || Array.from(fi.files || []);
+    var audioCount = 0, imageCount = 0;
+    for (var f of files) {
+      var tag = document.createElement('span');
+      tag.className = 'file-tag';
+      var name = f.name || f.relativePath || f.webkitRelativePath || 'file';
+      tag.textContent = name;
+      pv.appendChild(tag);
+      if (name.match(/\.(mp3|flac|ogg|wav|m4a|aiff?|wma)$/i)) audioCount++;
+      if (name.match(/\.(png|jpg|jpeg|gif|webp)$/i)) imageCount++;
+    }
+    // Show summary
+    var summary = document.createElement('p');
+    summary.style.cssText = 'font-size:0.78rem;color:var(--text-muted);margin-top:0.5rem;';
+    summary.textContent = audioCount + ' audio files' + (imageCount ? ', ' + imageCount + ' image(s) will be used as cover' : '');
+    pv.appendChild(summary);
+  }
+});
+
+function copyLink(url) {
+  navigator.clipboard.writeText(url).then(function() {
+    var btn = event.target; btn.textContent = '✓'; setTimeout(function() { btn.textContent = '🔗'; }, 2000);
+  });
+}
+
+async function uploadMixtape(e) {
+  e.preventDefault();
+  var btn = document.getElementById('uploadBtn');
+  var prog = document.getElementById('uploadProgress');
+  btn.disabled = true; prog.classList.remove('hidden');
+  var fd = new FormData(document.getElementById('uploadForm'));
+
+  // If files were dropped from a folder, append them manually
+  if (window._droppedFiles && window._droppedFiles.length) {
+    fd.delete('files');
+    for (var f of window._droppedFiles) {
+      fd.append('files', f, f.name || f.relativePath || f.webkitRelativePath);
+    }
+  }
+
+  try {
+    var r = await fetch('/api/upload', { method: 'POST', body: fd });
+    var d = await r.json();
+    if (d.error) { alert('Error: ' + d.error); return; }
+    location.reload();
+  } catch(err) { alert('Upload failed: ' + err); }
+  finally { btn.disabled = false; prog.classList.add('hidden'); }
+}
+
+async function deleteShare(id) {
+  if (!confirm('Delete this mixtape permanently?')) return;
+  await fetch('/api/share/' + id, { method: 'DELETE' });
+  document.querySelector('[data-id="' + id + '"]').remove();
+}
+
+// Refresh status
+setInterval(function() {
+  fetch('/api/shares').then(function(r) {
+    if (r.ok) document.getElementById('serverStatus').style.color = '#4ade80';
+    else document.getElementById('serverStatus').style.color = '#f87171';
+  }).catch(function() {
+    document.getElementById('serverStatus').style.color = '#f87171';
+  });
+}, 30000);
+</script>
+
+</body>
+</html>
