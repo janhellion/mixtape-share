@@ -380,6 +380,11 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
   background: rgba(255,255,255,0.8);
   transform: scale(1.05);
 }
+.control-btn.active {
+  color: var(--accent, #eb5e28);
+  background: rgba(235,94,40,0.12);
+  border-color: rgba(235,94,40,0.3);
+}
 .play-btn {
   font-size: 1.3rem;
   background: var(--accent, #15c7ff);
