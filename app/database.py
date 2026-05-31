@@ -37,9 +37,10 @@ def generate_invite_code():
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
@@ -58,7 +59,8 @@ def init_db():
             track_count INTEGER DEFAULT 0,
             total_duration INTEGER DEFAULT 0,
             cover_path TEXT DEFAULT '',
-            accent_color TEXT DEFAULT ''
+            accent_color TEXT DEFAULT '',
+            from_name TEXT DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS tracks (
@@ -117,11 +119,11 @@ def init_db():
     conn.close()
 
 
-def create_share(share_id, name, path, passcode="", cover_path="", accent_color=""):
+def create_share(share_id, name, path, passcode="", cover_path="", accent_color="", expires_at=0, from_name=""):
     conn = get_conn()
     conn.execute(
-        "INSERT INTO shares (id, name, path, passcode, created_at, cover_path, accent_color) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (share_id, name, path, passcode, int(time.time()), cover_path, accent_color),
+        "INSERT INTO shares (id, name, path, passcode, created_at, cover_path, accent_color, expires_at, from_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (share_id, name, path, passcode, int(time.time()), cover_path, accent_color, expires_at, from_name),
     )
     conn.commit()
     conn.close()
@@ -211,7 +213,7 @@ def log_play(track_id, ip=""):
 
 
 def update_share(share_id, **kwargs):
-    allowed = {"name", "passcode", "expires_at", "cover_path", "accent_color"}
+    allowed = {"name", "passcode", "expires_at", "cover_path", "accent_color", "from_name"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return

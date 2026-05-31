@@ -5,6 +5,9 @@ import time
 import zipfile
 import hashlib
 import asyncio
+import smtplib
+import threading
+from email.mime.text import MIMEText
 from pathlib import Path
 import shutil
 
@@ -22,6 +25,30 @@ from .database import *
 MEDIA_DIR = os.environ.get("MEDIA_DIR", "/storage/music")
 COVERS_DIR = os.environ.get("COVERS_DIR", "/storage/covers")
 BASE_URL = os.environ.get("BASE_URL", "https://mixtape.janhellion.com")
+
+# ─── SMTP Config ─────────────────────────────────────────────
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.ionos.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "hola@janhellion.com")
+SMTP_PASS = os.environ.get("SMTP_PASS", "CHANGE_ME")
+SMTP_FROM = os.environ.get("SMTP_FROM", "hola@janhellion.com")
+
+def send_email(to_email, subject, html_body):
+    """Send an HTML email in a background thread."""
+    def _send():
+        try:
+            msg = MIMEText(html_body, "html")
+            msg["Subject"] = subject
+            msg["From"] = SMTP_FROM
+            msg["To"] = to_email
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+            print(f"Email sent to {to_email}")
+        except Exception as e:
+            print(f"Email failed to {to_email}: {e}")
+    threading.Thread(target=_send, daemon=True).start()
 
 os.makedirs(MEDIA_DIR, exist_ok=True)
 os.makedirs(COVERS_DIR, exist_ok=True)
@@ -160,6 +187,7 @@ async def dashboard(request: Request):
         "is_admin": is_admin,
         "invite_codes": invites,
         "users": users_list,
+        "now": int(time.time()),
     })
 
 
@@ -168,7 +196,10 @@ async def upload_mixtape(
     files: list[UploadFile] = File(...),
     name: str = Form(...),
     passcode: str = Form(""),
+    expiration: int = Form(0),
     cover: UploadFile = File(None),
+    notify_email: str = Form(""),
+    from_name: str = Form(""),
 ):
     """Create a new mixtape from uploaded files. Accepts audio files, zip, or cover."""
     safe_name = sanitize_filename(name)
@@ -218,8 +249,34 @@ async def upload_mixtape(
         if os.path.isfile(cover_full_path):
             accent_color = extract_dominant_color(cover_full_path)
 
-    create_share(share_id, name, folder, passcode, cover_path, accent_color)
+    # Set expiration
+    expires_at = 0
+    if expiration > 0:
+        expires_at = int(time.time()) + (expiration * 86400)
+
+    create_share(share_id, name, folder, passcode, cover_path, accent_color, expires_at, from_name)
     set_tracks(share_id, tracks)
+
+    # Send email notification if requested
+    if notify_email:
+        share_url = f"{BASE_URL}/share/{share_id}"
+        tracks_list = tracks[:5]
+        track_list_html = "".join(
+            f"<li style='padding:4px 0;border-bottom:1px solid #eee;'>{t['title']} — {t['artist']}</li>"
+            for t in tracks_list
+        )
+        if len(tracks) > 5:
+            track_list_html += f"<li style='padding:4px 0;color:#888;'>… and {len(tracks)-5} more</li>"
+        email_html = f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
+        <h1 style="font-size:1.3rem;">📼 {name}</h1>
+        <p>Someone shared a mixtape with you!</p>
+        <a href="{share_url}" style="display:inline-block;padding:10px 24px;background:#eb5e28;color:#fff;text-decoration:none;border-radius:4px;margin:12px 0;">Listen to Mixtape</a>
+        <h3 style="margin-top:16px;">Tracks ({len(tracks)})</h3>
+        <ul style="list-style:none;padding:0;">{track_list_html}</ul>
+        <p style="color:#888;font-size:0.8rem;margin-top:16px;">Sent via mixtape.janhellion.com</p>
+        </div>"""
+        send_email(notify_email, f"📼 {name} — A mixtape for you", email_html)
 
     return JSONResponse({
         "id": share_id,
@@ -233,11 +290,13 @@ async def list_shares():
     shares = get_all_shares()
     result = []
     for s in shares:
+        expired = s["expires_at"] > 0 and s["expires_at"] < time.time()
         result.append({
             "id": s["id"],
             "name": s["name"],
             "created_at": s["created_at"],
             "expires_at": s["expires_at"],
+            "expired": expired,
             "download_count": s["download_count"],
             "track_count": s["track_count"],
             "cover_path": s.get("cover_path", ""),
@@ -413,24 +472,67 @@ async def download_zip(share_id: str):
     tracks = get_tracks(share_id)
     increment_download(share_id)
 
-    def zip_stream():
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+    safe_name = re.sub(r"[^\w\s-]", "", share["name"]).strip().replace(" ", "_")
+
+    # Build ZIP with a temp file to avoid memory issues
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+    try:
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+            # Add audio files
             for t in tracks:
                 fp = os.path.join(folder, t["filename"])
                 if os.path.isfile(fp):
                     ext = t["filename"].rsplit(".", 1)[-1]
                     arcname = f"{t.get('title', t['filename'])}.{ext}"
                     zf.write(fp, arcname)
-        buffer.seek(0)
-        yield buffer.read()
 
-    safe_name = re.sub(r"[^\w\s-]", "", share["name"]).strip().replace(" ", "_")
-    return StreamingResponse(
-        zip_stream(),
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}.zip"'},
-    )
+            # Add title.txt
+            zf.writestr("title.txt", share["name"])
+
+            # Add from.txt
+            from_name = share.get("from_name", "").strip()
+            if from_name:
+                zf.writestr("from.txt", from_name)
+            else:
+                zf.writestr("from.txt", "mixtape.janhellion.com")
+
+            # Add playlist.m3u
+            m3u_lines = ["#EXTM3U"]
+            for t in tracks:
+                ext = t["filename"].rsplit(".", 1)[-1]
+                title = t.get("title", t["filename"])
+                artist = t.get("artist", "Unknown")
+                duration = int(t.get("duration", 0))
+                arcname = f"{title}.{ext}"
+                m3u_lines.append(f"#EXTINF:{duration},{artist} - {title}")
+                m3u_lines.append(arcname)
+            zf.writestr(f"{safe_name}.m3u", "\n".join(m3u_lines) + "\n")
+
+        tmp.close()
+        file_size = os.path.getsize(tmp.name)
+
+        async def stream_zip():
+            with open(tmp.name, "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+                    await asyncio.sleep(0)
+            os.unlink(tmp.name)
+
+        return StreamingResponse(
+            stream_zip(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_name}.zip"',
+                "Content-Length": str(file_size),
+            },
+        )
+    except Exception as e:
+        os.unlink(tmp.name)
+        raise HTTPException(500, detail=str(e))
 
 
 @app.get("/api/cover/{cover_name}")
@@ -456,6 +558,14 @@ async def player(request: Request, share_id: str):
             "request": request, "share": None, "tracks": [],
             "base_url": BASE_URL, "error": "Mixtape not found",
         })
+
+    # Check expiration
+    if share.get("expires_at", 0) > 0 and share["expires_at"] < time.time():
+        return templates.TemplateResponse("player.html", {
+            "request": request, "share": None, "tracks": [],
+            "base_url": BASE_URL, "error": "This mixtape has expired",
+        })
+
     tracks = get_tracks(share_id)
     return templates.TemplateResponse("player.html", {
         "request": request, "share": share, "tracks": tracks,

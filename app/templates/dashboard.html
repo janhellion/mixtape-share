@@ -43,8 +43,29 @@
             <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">If you upload a JPG/PNG with the audio files, it'll be auto-detected as the cover.</p>
           </div>
           <div class="form-group">
+            <label>From (optional)</label>
+            <input type="text" name="from_name" placeholder="Your name — appears on the digital tape">
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">Shows up in the ZIP as a from.txt — like a mixtape note</p>
+          </div>
+          <div class="form-group">
+            <label>Email notification (optional)</label>
+            <input type="email" name="notify_email" placeholder="recipient@example.com">
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">An email with the mixtape link will be sent from hola@janhellion.com</p>
+          </div>
+          <div class="form-group">
             <label>Passcode (optional)</label>
             <input type="text" name="passcode" placeholder="Leave empty for public">
+          </div>
+          <div class="form-group">
+            <label>Expiration</label>
+            <select name="expiration" style="width:100%;padding:0.65rem 0.75rem;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;font-family:var(--font);">
+              <option value="0">Never expires</option>
+              <option value="14">2 weeks</option>
+              <option value="30">1 month</option>
+              <option value="90">3 months</option>
+              <option value="180">6 months</option>
+              <option value="365">1 year</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Files</label>
@@ -80,7 +101,18 @@
           </span>
           <span class="col-tracks">{{ share.track_count }}</span>
           <span class="col-downloads">{{ share.download_count }}</span>
-          <span class="col-created">{{ share.created_at | int | timestamp_to_date }}</span>
+          <span class="col-created">
+            {%- if share.expires_at and share.expires_at > 0 -%}
+              {%- set days_left = ((share.expires_at - share.created_at) / 86400) | round(0) | int -%}
+              {%- if share.expires_at < now -%}
+                <span style="color:var(--danger);">Expired</span>
+              {%- else -%}
+                {{ days_left }}d left
+              {%- endif -%}
+            {%- else -%}
+              {{ share.created_at | int | timestamp_to_date }}
+            {%- endif -%}
+          </span>
           <span class="col-actions">
             <button onclick="copyLink('{{ base_url }}/share/{{ share.id }}')" title="Copy link">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
