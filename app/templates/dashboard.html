@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mixtape Share — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Coda:wght@400;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="dashboard">
@@ -11,7 +14,12 @@
     <h1>📼 Mixtape Share</h1>
     <div class="header-actions">
       <span id="serverStatus" class="status-dot">●</span>
+      <span style="font-size:0.8rem;color:var(--text-muted);">{{ user.username }}</span>
+      {% if is_admin %}
+      <button onclick="showAdmin()" class="btn-outline" style="font-size:0.75rem;">👥 Admin</button>
+      {% endif %}
       <button onclick="showUpload()" class="btn-primary">+ New Mixtape</button>
+      <button onclick="logout()" class="btn-outline" style="font-size:0.75rem;border-color:var(--danger);color:var(--danger);">Logout</button>
     </div>
   </header>
 
@@ -74,9 +82,62 @@
           <span class="col-downloads">{{ share.download_count }}</span>
           <span class="col-created">{{ share.created_at | int | timestamp_to_date }}</span>
           <span class="col-actions">
-            <button onclick="copyLink('{{ base_url }}/share/{{ share.id }}')" title="Copy link">🔗</button>
-            <button onclick="showQR('{{ base_url }}/share/{{ share.id }}')" title="QR Code">📱</button>
-            <button onclick="deleteShare('{{ share.id }}')" class="btn-danger" title="Delete">🗑</button>
+            <button onclick="copyLink('{{ base_url }}/share/{{ share.id }}')" title="Copy link">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="3" y="5" width="2" height="6"/>
+                <rect x="5" y="3" width="2" height="2"/>
+                <rect x="5" y="9" width="2" height="2"/>
+                <rect x="7" y="1" width="2" height="2"/>
+                <rect x="7" y="7" width="2" height="2"/>
+                <rect x="6" y="11" width="2" height="2"/>
+                <rect x="9" y="1" width="2" height="2"/>
+                <rect x="9" y="7" width="2" height="2"/>
+                <rect x="11" y="3" width="2" height="2"/>
+                <rect x="11" y="9" width="2" height="2"/>
+                <rect x="13" y="5" width="2" height="6"/>
+              </svg>
+            </button>
+            <button onclick="window.open('{{ base_url }}/share/{{ share.id }}','_blank')" title="Open in new tab">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="2" y="2" width="9" height="9"/>
+                <rect x="4" y="4" width="5" height="5"/>
+                <rect x="11" y="1" width="4" height="2"/>
+                <rect x="13" y="1" width="2" height="5"/>
+                <rect x="10" y="1" width="1" height="1"/>
+                <rect x="15" y="5" width="1" height="1"/>
+              </svg>
+            </button>
+            <button onclick="showQR('{{ base_url }}/share/{{ share.id }}')" title="QR Code">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="1" y="1" width="5" height="5"/>
+                <rect x="2" y="2" width="1" height="1"/>
+                <rect x="4" y="2" width="1" height="1"/>
+                <rect x="2" y="4" width="1" height="1"/>
+                <rect x="10" y="1" width="5" height="5"/>
+                <rect x="11" y="2" width="1" height="1"/>
+                <rect x="13" y="2" width="1" height="1"/>
+                <rect x="11" y="4" width="1" height="1"/>
+                <rect x="1" y="10" width="5" height="5"/>
+                <rect x="2" y="11" width="3" height="3"/>
+                <rect x="10" y="10" width="2" height="2"/>
+                <rect x="13" y="10" width="2" height="2"/>
+                <rect x="13" y="13" width="2" height="2"/>
+                <rect x="10" y="13" width="2" height="1"/>
+                <rect x="10" y="14" width="1" height="1"/>
+              </svg>
+            </button>
+            <button onclick="deleteShare('{{ share.id }}')" class="btn-danger" title="Delete">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="5" y="0" width="6" height="2"/>
+                <rect x="3" y="2" width="10" height="2"/>
+                <rect x="2" y="4" width="12" height="10"/>
+                <rect x="5" y="6" width="2" height="6"/>
+                <rect x="9" y="6" width="2" height="6"/>
+                <rect x="7" y="6" width="2" height="6"/>
+                <rect x="1" y="4" width="2" height="1"/>
+                <rect x="13" y="4" width="2" height="1"/>
+              </svg>
+            </button>
           </span>
         </div>
         {% endfor %}
@@ -103,6 +164,37 @@
     <p>mixtape.janhellion.com</p>
   </footer>
 
+<!-- Admin Modal -->
+<div id="adminModal" class="modal hidden">
+  <div class="modal-content" style="max-width:600px;">
+    <span class="close" onclick="hideAdmin()">&times;</span>
+    <h2>👥 Admin Panel</h2>
+
+    <h3 style="font-weight:800;font-size:0.9rem;margin-bottom:0.5rem;">Invite Codes</h3>
+    <button onclick="generateInvite()" class="btn-primary" style="font-size:0.8rem;margin-bottom:0.8rem;">+ Generate Code</button>
+    <div id="inviteList" style="font-size:0.8rem;">
+      {% for c in invite_codes %}
+      <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid var(--border);">
+        <code style="font-family:monospace;">{{ c.code }}</code>
+        <span style="color:var(--text-muted);">
+          {% if c.used_by %}Used by {{ c.used_by_name }}{% else %}<span style="color:var(--success);">Available</span>{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <h3 style="font-weight:800;font-size:0.9rem;margin:1rem 0 0.5rem;">Users</h3>
+    <div style="font-size:0.8rem;">
+      {% for u in users %}
+      <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid var(--border);">
+        <span>{{ u.username }}{% if u.is_admin %} <span style="color:var(--accent);">(admin)</span>{% endif %}</span>
+        <span style="color:var(--text-muted);">{{ u.created_at | timestamp_to_date }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
 <script>
 function previewCover(e) {
   var file = e.target.files[0];
@@ -119,6 +211,15 @@ function previewCover(e) {
 
 function showUpload() { document.getElementById('uploadModal').classList.remove('hidden'); }
 function hideUpload() { document.getElementById('uploadModal').classList.add('hidden'); }
+function showAdmin() { document.getElementById('adminModal').classList.remove('hidden'); }
+function hideAdmin() { document.getElementById('adminModal').classList.add('hidden'); }
+async function logout() { await fetch('/api/logout', {method:'POST'}); window.location.href='/login'; }
+async function generateInvite() {
+  var r = await fetch('/api/admin/invites', {method:'POST'});
+  var d = await r.json();
+  if (d.code) { location.reload(); }
+}
+
 function showQR(url) {
   document.getElementById('qrModal').classList.remove('hidden');
   document.getElementById('qrLink').textContent = url;

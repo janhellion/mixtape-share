@@ -13,7 +13,7 @@ import colorsys
 from PIL import Image
 from collections import Counter
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -144,11 +144,22 @@ def create_token(name):
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
+    token = request.cookies.get("session", "")
+    user = get_user_by_session(token)
+    if not user:
+        return RedirectResponse(url="/login")
     shares = get_all_shares()
+    is_admin = is_admin_user(user["id"])
+    invites = get_invite_codes() if is_admin else []
+    users_list = get_all_users() if is_admin else []
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "shares": shares,
         "base_url": BASE_URL,
+        "user": user,
+        "is_admin": is_admin,
+        "invite_codes": invites,
+        "users": users_list,
     })
 
 
@@ -364,6 +375,33 @@ async def stream_audio(share_id: str, filename: str, request: Request):
         )
 
 
+@app.get("/api/download/track/{share_id}/{filename:path}")
+async def download_track(share_id: str, filename: str):
+    """Download a single track from a mixtape."""
+    share = get_share(share_id)
+    if not share:
+        raise HTTPException(404)
+    filepath = os.path.join(share["path"], filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(404)
+
+    async def file_stream():
+        with open(filepath, "rb") as f:
+            while True:
+                chunk = f.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+                await asyncio.sleep(0)
+
+    safe_name = re.sub(r"[^\w\s.-]", "", filename)
+    return StreamingResponse(
+        file_stream(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
 @app.get("/api/download/{share_id}")
 async def download_zip(share_id: str):
     share = get_share(share_id)
@@ -424,6 +462,111 @@ async def player(request: Request, share_id: str):
         "base_url": BASE_URL, "error": None,
         "accent_color": share.get("accent_color", "") if share else "",
     })
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, error: str = ""):
+    return templates.TemplateResponse("login.html", {"request": request, "error": error, "base_url": BASE_URL})
+
+
+@app.post("/api/login")
+async def api_login(request: Request):
+    data = await request.json()
+    user = authenticate_user(data.get("username", ""), data.get("password", ""))
+    if not user:
+        return JSONResponse({"error": "Invalid credentials"}, status_code=401)
+    token = create_session(user["id"])
+    resp = JSONResponse({"ok": True, "token": token, "is_admin": user["is_admin"]})
+    resp.set_cookie(key="session", value=token, httponly=True, max_age=86400 * 7, samesite="lax")
+    return resp
+
+
+@app.post("/api/logout")
+async def api_logout(request: Request):
+    token = request.cookies.get("session", "")
+    if token:
+        delete_session(token)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("session")
+    return resp
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request, error: str = "", code: str = ""):
+    return templates.TemplateResponse("register.html", {
+        "request": request, "error": error, "code": code, "base_url": BASE_URL,
+    })
+
+
+@app.post("/api/register")
+async def api_register(request: Request):
+    data = await request.json()
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    invite = data.get("invite_code", "").strip().upper()
+
+    if len(username) < 3 or len(password) < 4:
+        return JSONResponse({"error": "Username (3+ chars) and password (4+ chars) required"}, status_code=400)
+
+    # Verify invite code exists and is unused
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM invitation_codes WHERE code = ? AND used_by IS NULL", (invite,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return JSONResponse({"error": "Invalid or already used invite code"}, status_code=400)
+
+    uid = create_user(username, password)
+    if not uid:
+        return JSONResponse({"error": "Username already taken"}, status_code=400)
+
+    use_invite_code(invite, uid)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/me")
+async def api_me(request: Request):
+    token = request.cookies.get("session", "")
+    user = get_user_by_session(token)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse({
+        "id": user["id"],
+        "username": user["username"],
+        "is_admin": user["is_admin"],
+    })
+
+
+@app.get("/api/admin/invites")
+async def api_admin_invites(request: Request):
+    token = request.cookies.get("session", "")
+    user = get_user_by_session(token)
+    if not user or not is_admin_user(user["id"]):
+        raise HTTPException(401)
+    codes = get_invite_codes()
+    return JSONResponse(codes)
+
+
+@app.post("/api/admin/invites")
+async def api_create_invite(request: Request):
+    token = request.cookies.get("session", "")
+    user = get_user_by_session(token)
+    if not user or not is_admin_user(user["id"]):
+        raise HTTPException(401)
+    code = create_invite_code(user["id"])
+    return JSONResponse({"code": code})
+
+
+@app.get("/api/admin/users")
+async def api_admin_users(request: Request):
+    token = request.cookies.get("session", "")
+    user = get_user_by_session(token)
+    if not user or not is_admin_user(user["id"]):
+        raise HTTPException(401)
+    users = get_all_users()
+    codes = get_invite_codes()
+    return JSONResponse({"users": users, "invite_codes": codes})
 
 
 @app.on_event("startup")

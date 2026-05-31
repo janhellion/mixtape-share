@@ -1,10 +1,39 @@
 import os
 import sqlite3
 import time
+import hashlib
+import secrets
+import string
 
 DB_PATH = os.environ.get("DATABASE_URL", "/storage/app.db")
 if DB_PATH.startswith("sqlite:///"):
     DB_PATH = DB_PATH[10:]
+
+
+def hash_password(password):
+    """Hash a password using PBKDF2-SHA256."""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
+    return salt.hex() + ":" + dk.hex()
+
+
+def verify_password(password, stored):
+    """Verify a password against its hash."""
+    salt_hex, dk_hex = stored.split(":")
+    salt = bytes.fromhex(salt_hex)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
+    return dk.hex() == dk_hex
+
+
+def generate_token(length=32):
+    """Generate a secure random token."""
+    return secrets.token_hex(length)
+
+
+def generate_invite_code():
+    """Generate a short invite code."""
+    chars = string.ascii_uppercase + string.digits
+    return "MIX-" + "".join(secrets.choice(chars) for _ in range(8))
 
 
 def get_conn():
@@ -49,8 +78,42 @@ def init_db():
             played_at INTEGER NOT NULL,
             ip TEXT DEFAULT ''
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            is_admin INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            created_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS invitation_codes (
+            code TEXT PRIMARY KEY,
+            created_by INTEGER NOT NULL REFERENCES users(id),
+            created_at INTEGER NOT NULL,
+            used_by INTEGER REFERENCES users(id),
+            used_at INTEGER
+        );
     """)
     conn.commit()
+    conn.close()
+
+    # Create default admin user if no users exist
+    conn = get_conn()
+    row = conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+    if row["cnt"] == 0:
+        admin_pass = hash_password("admin")
+        conn.execute(
+            "INSERT INTO users (username, password_hash, created_at, is_admin) VALUES (?, ?, ?, 1)",
+            ("admin", admin_pass, int(time.time())),
+        )
+        print("Created default admin user: admin / admin")
     conn.close()
 
 
@@ -80,6 +143,7 @@ def get_all_shares():
 
 def delete_share(share_id):
     conn = get_conn()
+    conn.execute("DELETE FROM play_events WHERE track_id IN (SELECT id FROM tracks WHERE share_id = ?)", (share_id,))
     conn.execute("DELETE FROM tracks WHERE share_id = ?", (share_id,))
     conn.execute("DELETE FROM shares WHERE id = ?", (share_id,))
     conn.commit()
@@ -157,3 +221,108 @@ def update_share(share_id, **kwargs):
     conn.execute(f"UPDATE shares SET {sets} WHERE id=?", vals)
     conn.commit()
     conn.close()
+
+
+# ─── Auth Functions ──────────────────────────────────────────
+
+def create_user(username, password):
+    conn = get_conn()
+    pw_hash = hash_password(password)
+    try:
+        conn.execute(
+            "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+            (username, pw_hash, int(time.time())),
+        )
+        conn.commit()
+        uid = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        conn.close()
+        return uid["id"] if uid else None
+    except sqlite3.IntegrityError:
+        conn.close()
+        return None
+
+
+def authenticate_user(username, password):
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    if row and verify_password(password, row["password_hash"]):
+        return dict(row)
+    return None
+
+
+def create_session(user_id):
+    token = generate_token()
+    conn = get_conn()
+    conn.execute("INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)", (token, user_id, int(time.time())))
+    conn.commit()
+    conn.close()
+    return token
+
+
+def get_user_by_session(token):
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT u.* FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ?",
+        (token,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_session(token):
+    conn = get_conn()
+    conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+    conn.commit()
+    conn.close()
+
+
+def create_invite_code(created_by):
+    code = generate_invite_code()
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO invitation_codes (code, created_by, created_at) VALUES (?, ?, ?)",
+        (code, created_by, int(time.time())),
+    )
+    conn.commit()
+    conn.close()
+    return code
+
+
+def use_invite_code(code, user_id):
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM invitation_codes WHERE code = ? AND used_by IS NULL", (code,)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    conn.execute("UPDATE invitation_codes SET used_by = ?, used_at = ? WHERE code = ?", (user_id, int(time.time()), code))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_invite_codes():
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT ic.*, u.username as creator_name, uu.username as used_by_name
+           FROM invitation_codes ic
+           JOIN users u ON ic.created_by = u.id
+           LEFT JOIN users uu ON ic.used_by = uu.id
+           ORDER BY ic.created_at DESC"""
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_users():
+    conn = get_conn()
+    rows = conn.execute("SELECT id, username, created_at, is_admin FROM users ORDER BY created_at ASC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def is_admin_user(user_id):
+    conn = get_conn()
+    row = conn.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    return row and row["is_admin"] == 1

@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% if share %}{{ share.name }}{% else %}Mixtape{% endif %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Coda:wght@400;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 {% if share and share.cover_path %}
 <style>
@@ -43,6 +46,9 @@
   <div id="playerMain" class="{% if share and share.passcode %}hidden{% endif %}">
     <div class="player-bg-overlay"></div>
     <div class="player-container">
+      <div class="player-layout">
+      <!-- Left: Cover + Info + Controls -->
+      <div class="player-left">
       <!-- Header -->
       <div class="player-header">
         {% if share and share.cover_path %}
@@ -53,6 +59,7 @@
         <div class="player-info">
           <h1 id="mixtapeName">{{ share.name if share else '' }}</h1>
           <p class="track-count" id="mixtapeMeta">{{ tracks|length }} tracks</p>
+          <a href="/api/download/{{ share.id }}" class="download-btn" onclick="trackDownload()" style="margin-top:0.5rem;display:inline-block;">⬇ Download Tape</a>
         </div>
       </div>
 
@@ -74,6 +81,10 @@
         </div>
       </div>
 
+      </div><!-- /.player-left -->
+
+      <!-- Right: Tracklist -->
+      <div class="player-right">
       <!-- Tracklist -->
       <div class="tracklist" id="tracklist">
         {% for track in tracks %}
@@ -84,13 +95,18 @@
             <span class="track-artist">{{ track.artist }}</span>
           </div>
           <span class="track-duration">{{ track.duration | format_duration }}</span>
+          <a href="/api/download/track/{{ share.id }}/{{ track.filename }}" class="track-dl" onclick="event.stopPropagation();" title="Download track" download>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="12" width="10" height="2"/><rect x="7" y="2" width="2" height="7"/><rect x="5" y="4" width="2" height="2"/><rect x="9" y="4" width="2" height="2"/><rect x="4" y="6" width="2" height="2"/><rect x="10" y="6" width="2" height="2"/><rect x="6" y="6" width="4" height="2"/></svg>
+          </a>
         </div>
         {% endfor %}
       </div>
 
+      </div><!-- /.player-right -->
+      </div><!-- /.player-layout -->
       <!-- Footer -->
-      <div class="player-footer">
-        <a href="/api/download/{{ share.id }}" class="download-btn" onclick="trackDownload()">⬇ Download Tape</a>
+      <div style="text-align:center;margin-top:0.6rem;font-size:0.65rem;color:rgba(0,0,0,0.25);letter-spacing:0.05em;">
+        📼 mixtape.janhellion.com
       </div>
     </div>
   </div>

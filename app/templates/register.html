@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mixtape Share — Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Coda:wght@400;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .login-page { display:flex; align-items:center; justify-content:center; min-height:100vh; background:#fffcf2; }
+  .login-box { background:#fff; border:1px solid #ccc5b9; border-radius:6px; padding:2.5rem; width:90%; max-width:360px; box-shadow:0 4px 20px rgba(0,0,0,0.04); }
+  .login-box h1 { font-size:1.3rem; margin-bottom:0.3rem; }
+  .login-box p { color:#403d39; font-size:0.85rem; margin-bottom:1.5rem; }
+  .login-box .form-group { margin-bottom:1rem; }
+  .login-box input { width:100%; padding:0.65rem 0.75rem; border:1px solid #ccc5b9; border-radius:3px; font-family:'Coda',sans-serif; font-size:0.9rem; background:#fffcf2; }
+  .login-box input:focus { outline:none; border-color:#eb5e28; }
+  .login-box .btn-primary { width:100%; padding:0.65rem; }
+  .error-msg { color:#D0021B; font-size:0.82rem; margin-bottom:0.8rem; }
+  .success-msg { color:#6ECA09; font-size:0.82rem; margin-bottom:0.8rem; }
+  .login-footer { text-align:center; margin-top:1.2rem; font-size:0.8rem; color:#403d39; }
+  .login-footer a { color:#eb5e28; text-decoration:none; }
+</style>
+</head>
+<body class="login-page">
+  <div class="login-box">
+    <h1>📼 Register</h1>
+    <p>You need an invite code to join</p>
+    <div id="errorMsg" class="error-msg hidden"></div>
+    <div id="successMsg" class="success-msg hidden"></div>
+    <form id="registerForm" onsubmit="register(event)">
+      <div class="form-group">
+        <input type="text" name="username" placeholder="Username" required autofocus minlength="3">
+      </div>
+      <div class="form-group">
+        <input type="password" name="password" placeholder="Password (4+ chars)" required minlength="4">
+      </div>
+      <div class="form-group">
+        <input type="text" name="invite_code" placeholder="Invite Code (e.g. MIX-XXXXXXXX)" required style="text-transform:uppercase;letter-spacing:0.1em;">
+      </div>
+      <button type="submit" class="btn-primary">Create Account</button>
+    </form>
+    <div class="login-footer">
+      Already have an account? <a href="/login">Sign in</a>
+    </div>
+  </div>
+<script>
+async function register(e) {
+  e.preventDefault();
+  var fd = new FormData(e.target);
+  var err = document.getElementById('errorMsg');
+  var suc = document.getElementById('successMsg');
+  err.classList.add('hidden'); suc.classList.add('hidden');
+  try {
+    var r = await fetch('/api/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        username: fd.get('username'),
+        password: fd.get('password'),
+        invite_code: fd.get('invite_code')
+      })
+    });
+    var d = await r.json();
+    if (r.ok) {
+      suc.textContent = 'Account created! Redirecting to login...';
+      suc.classList.remove('hidden');
+      setTimeout(function() { window.location.href = '/login'; }, 1500);
+    } else {
+      err.textContent = d.error || 'Registration failed';
+      err.classList.remove('hidden');
+    }
+  } catch(err) { alert('Connection error'); }
+}
+</script>
+</body>
+</html>
