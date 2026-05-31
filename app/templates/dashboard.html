@@ -284,6 +284,27 @@ function customConfirm(msg) {
     modal.onclick = function(e) { if (e.target === modal) { modal.classList.add('hidden'); resolve(false); } };
   });
 }
+// ─── Modal helpers ───
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  // Focus first input or button inside modal
+  var m = document.getElementById(id);
+  var inp = m.querySelector('input, button, select, textarea');
+  if (inp) setTimeout(function() { inp.focus(); }, 100);
+}
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+// Close modals on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal:not(.hidden)').forEach(function(m) {
+      m.classList.add('hidden');
+    });
+  }
+});
+
 function previewCover(e) {
   var file = e.target.files[0];
   if (file) {
@@ -297,10 +318,10 @@ function previewCover(e) {
   }
 }
 
-function showUpload() { document.getElementById('uploadModal').classList.remove('hidden'); }
-function hideUpload() { document.getElementById('uploadModal').classList.add('hidden'); }
-function showAdmin() { document.getElementById('adminModal').classList.remove('hidden'); }
-function hideAdmin() { document.getElementById('adminModal').classList.add('hidden'); }
+function showUpload() { openModal('uploadModal'); }
+function hideUpload() { closeModal('uploadModal'); }
+function showAdmin() { openModal('adminModal'); }
+function hideAdmin() { closeModal('adminModal'); }
 async function logout() { await fetch('/api/logout', {method:'POST'}); window.location.href='/login'; }
 async function generateInvite() {
   var r = await fetch('/api/admin/invites', {method:'POST'});
@@ -324,7 +345,7 @@ async function deleteUser(id, username) {
 }
 
 function showQR(url) {
-  document.getElementById('qrModal').classList.remove('hidden');
+  openModal('qrModal');
   document.getElementById('qrLink').textContent = url;
   document.getElementById('qrContainer').innerHTML = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url) + '" alt="QR Code">';
 }
