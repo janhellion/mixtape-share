@@ -102,12 +102,6 @@ def init_db():
             used_by INTEGER REFERENCES users(id),
             used_at INTEGER
         );
-
-        CREATE TABLE IF NOT EXISTS short_links (
-            code TEXT PRIMARY KEY,
-            share_id TEXT NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
-            created_at INTEGER NOT NULL
-        );
     """)
     conn.commit()
     conn.close()
@@ -122,6 +116,17 @@ def init_db():
             ("admin", admin_pass, int(time.time())),
         )
         print("Created default admin user: admin / admin")
+    conn.close()
+
+    # Migrations for existing databases
+    conn = get_conn()
+    # Add from_name column if missing
+    try:
+        conn.execute("ALTER TABLE shares ADD COLUMN from_name TEXT DEFAULT ''")
+        conn.commit()
+        print("Added from_name column")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.close()
 
 
@@ -334,55 +339,3 @@ def is_admin_user(user_id):
     row = conn.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
     return row and row["is_admin"] == 1
-
-
-# ─── Short Link Functions ────────────────────────────────────
-
-import string as _string
-
-def _generate_short_code(length=5):
-    """Generate a random short alphanumeric code."""
-    chars = _string.ascii_letters + _string.digits
-    while True:
-        code = "".join(secrets.choice(chars) for _ in range(length))
-        yield code
-
-
-def create_short_link(share_id):
-    """Create a short link for a share. Returns the code."""
-    conn = get_conn()
-    code_gen = _generate_short_code()
-    for _ in range(10):  # Try up to 10 times to avoid collisions
-        code = next(code_gen)
-        existing = conn.execute("SELECT 1 FROM short_links WHERE code = ?", (code,)).fetchone()
-        if not existing:
-            conn.execute(
-                "INSERT INTO short_links (code, share_id, created_at) VALUES (?, ?, ?)",
-                (code, share_id, int(time.time())),
-            )
-            conn.commit()
-            conn.close()
-            return code
-    conn.close()
-    # Fallback: use hash
-    import hashlib
-    return hashlib.md5(share_id.encode()).hexdigest()[:5]
-
-
-def get_short_link(code):
-    """Get the share_id for a short code."""
-    conn = get_conn()
-    row = conn.execute("SELECT share_id FROM short_links WHERE code = ?", (code,)).fetchone()
-    conn.close()
-    return row["share_id"] if row else None
-
-
-def get_short_links_for_share(share_id):
-    """Get all short codes for a share."""
-    conn = get_conn()
-    rows = conn.execute(
-        "SELECT code FROM short_links WHERE share_id = ? ORDER BY created_at DESC",
-        (share_id,),
-    ).fetchall()
-    conn.close()
-    return [r["code"] for r in rows]

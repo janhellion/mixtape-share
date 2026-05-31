@@ -26,8 +26,6 @@ MEDIA_DIR = os.environ.get("MEDIA_DIR", "/storage/music")
 COVERS_DIR = os.environ.get("COVERS_DIR", "/storage/covers")
 BASE_URL = os.environ.get("BASE_URL", "https://mixtape.janhellion.com")
 
-SHORT_URL_BASE = os.environ.get("SHORT_URL_BASE", "https://s.janhellion.com")
-
 # ─── SMTP Config ─────────────────────────────────────────────
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.ionos.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
@@ -178,19 +176,12 @@ async def dashboard(request: Request):
     if not user:
         return RedirectResponse(url="/login")
     shares = get_all_shares()
-    # Get short codes for all shares
-    short_codes = {}
-    for s in shares:
-        codes = get_short_links_for_share(s["id"])
-        if codes:
-            short_codes[s["id"]] = codes[0]
     is_admin = is_admin_user(user["id"])
     invites = get_invite_codes() if is_admin else []
     users_list = get_all_users() if is_admin else []
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "shares": shares,
-        "short_codes": short_codes,
         "base_url": BASE_URL,
         "user": user,
         "is_admin": is_admin,
@@ -266,10 +257,6 @@ async def upload_mixtape(
     create_share(share_id, name, folder, passcode, cover_path, accent_color, expires_at, from_name)
     set_tracks(share_id, tracks)
 
-    # Create short link
-    short_code = create_short_link(share_id)
-    short_url = f"{SHORT_URL_BASE}/{short_code}"
-
     # Send email notification if requested
     if notify_email:
         share_url = f"{BASE_URL}/share/{share_id}"
@@ -294,7 +281,6 @@ async def upload_mixtape(
     return JSONResponse({
         "id": share_id,
         "url": f"{BASE_URL}/share/{share_id}",
-        "short_url": short_url,
         "tracks": len(tracks),
     })
 
@@ -305,8 +291,6 @@ async def list_shares():
     result = []
     for s in shares:
         expired = s["expires_at"] > 0 and s["expires_at"] < time.time()
-        short_codes = get_short_links_for_share(s["id"])
-        short_code = short_codes[0] if short_codes else ""
         result.append({
             "id": s["id"],
             "name": s["name"],
@@ -317,7 +301,6 @@ async def list_shares():
             "track_count": s["track_count"],
             "cover_path": s.get("cover_path", ""),
             "accent_color": s.get("accent_color", ""),
-            "short_code": short_code,
             "url": f"{BASE_URL}/share/{s['id']}",
         })
     return JSONResponse(result)
@@ -566,18 +549,6 @@ async def log_play_event(share_id: str, track_id: int, request: Request):
     ip = request.client.host if request.client else ""
     log_play(track_id, ip)
     return JSONResponse({"ok": True})
-
-
-@app.get("/s/{code}")
-async def short_link_redirect(request: Request, code: str):
-    """Redirect a short link to the full share page."""
-    share_id = get_short_link(code)
-    if not share_id:
-        return templates.TemplateResponse("player.html", {
-            "request": request, "share": None, "tracks": [],
-            "base_url": BASE_URL, "error": "Link not found",
-        })
-    return RedirectResponse(url=f"/share/{share_id}")
 
 
 @app.get("/share/{share_id}", response_class=HTMLResponse)
