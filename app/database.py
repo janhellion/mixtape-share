@@ -60,7 +60,8 @@ def init_db():
             total_duration INTEGER DEFAULT 0,
             cover_path TEXT DEFAULT '',
             accent_color TEXT DEFAULT '',
-            from_name TEXT DEFAULT ''
+            from_name TEXT DEFAULT '',
+            note TEXT DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS tracks (
@@ -127,14 +128,21 @@ def init_db():
         print("Added from_name column")
     except sqlite3.OperationalError:
         pass  # Column already exists
+    # Add note column if missing
+    try:
+        conn.execute("ALTER TABLE shares ADD COLUMN note TEXT DEFAULT ''")
+        conn.commit()
+        print("Added note column")
+    except sqlite3.OperationalError:
+        pass
     conn.close()
 
 
-def create_share(share_id, name, path, passcode="", cover_path="", accent_color="", expires_at=0, from_name=""):
+def create_share(share_id, name, path, passcode="", cover_path="", accent_color="", expires_at=0, from_name="", note=""):
     conn = get_conn()
     conn.execute(
-        "INSERT INTO shares (id, name, path, passcode, created_at, cover_path, accent_color, expires_at, from_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (share_id, name, path, passcode, int(time.time()), cover_path, accent_color, expires_at, from_name),
+        "INSERT INTO shares (id, name, path, passcode, created_at, cover_path, accent_color, expires_at, from_name, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (share_id, name, path, passcode, int(time.time()), cover_path, accent_color, expires_at, from_name, note),
     )
     conn.commit()
     conn.close()

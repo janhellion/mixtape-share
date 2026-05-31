@@ -31,6 +31,15 @@
         <h2>Create New Mixtape</h2>
         <form id="uploadForm" onsubmit="uploadMixtape(event)">
           <div class="form-group">
+            <label>Files <span style="color:var(--text-muted);font-weight:400;text-transform:none;">— drop a folder, files, or ZIP</span></label>
+            <div class="dropzone" id="dropzone">
+              <p style="font-size:0.9rem;margin-bottom:0.2rem;">Drop files here</p>
+              <p style="font-size:0.75rem;color:var(--text-muted);">or click to browse</p>
+              <input type="file" name="files" multiple accept=".mp3,.flac,.ogg,.wav,.m4a,.zip,.png,.jpg,.jpeg,.gif" style="display:none" id="fileInput">
+              <div id="filePreview" class="file-preview"></div>
+            </div>
+          </div>
+          <div class="form-group">
             <label>Mixtape Name</label>
             <input type="text" name="name" placeholder="Leave empty to auto-name from album">
           </div>
@@ -40,17 +49,26 @@
               <input type="file" name="cover" accept=".png,.jpg,.jpeg,.gif,.webp" id="coverInput" onchange="previewCover(event)">
               <img id="coverPreview" class="cover-preview">
             </div>
-            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">If you upload a JPG/PNG with the audio files, it'll be auto-detected as the cover.</p>
           </div>
+
+          <!-- Advanced toggle -->
+          <div style="text-align:center;margin:0.5rem 0;">
+            <button type="button" onclick="toggleAdvanced()" class="btn-outline" style="font-size:0.78rem;padding:0.3rem 0.8rem;" id="advToggle">+ More options</button>
+          </div>
+          <div id="advancedFields" class="hidden">
+
           <div class="form-group">
             <label>From (optional)</label>
             <input type="text" name="from_name" placeholder="Your name — appears on the digital tape">
-            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">Shows up in the ZIP as a from.txt — like a mixtape note</p>
+          </div>
+          <div class="form-group">
+            <label>Note (optional)</label>
+            <textarea name="note" rows="2" placeholder="A personal message — becomes note.txt in the ZIP" style="width:100%;padding:0.65rem 0.75rem;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.9rem;font-family:var(--font);resize:vertical;"></textarea>
           </div>
           <div class="form-group">
             <label>Email notification (optional)</label>
             <input type="email" name="notify_email" placeholder="recipient@example.com">
-            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.3rem;">An email with the mixtape link will be sent from hola@janhellion.com</p>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">An email with the mixtape link will be sent from hola@janhellion.com</p>
           </div>
           <div class="form-group">
             <label>Passcode (optional)</label>
@@ -67,16 +85,10 @@
               <option value="365">1 year</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Files</label>
-            <div class="dropzone" id="dropzone">
-              <p>Drop audio files or a ZIP here, or click to browse</p>
-              <input type="file" name="files" multiple accept=".mp3,.flac,.ogg,.wav,.m4a,.zip,.png,.jpg,.jpeg,.gif" style="display:none" id="fileInput">
-              <div id="filePreview" class="file-preview"></div>
-            </div>
           </div>
-          <button type="submit" class="btn-primary" id="uploadBtn">Create Mixtape</button>
-          <div id="uploadProgress" class="hidden">Uploading and processing...</div>
+
+          <button type="submit" class="btn-primary" id="uploadBtn" style="width:100%;margin-top:0.5rem;">Create Mixtape</button>
+          <div id="uploadProgress" class="hidden" style="text-align:center;margin-top:0.5rem;">Uploading and processing...</div>
         </form>
       </div>
     </div>
@@ -287,13 +299,23 @@ function customConfirm(msg) {
 // ─── Modal helpers ───
 function openModal(id) {
   document.getElementById(id).classList.remove('hidden');
-  // Focus first input or button inside modal
   var m = document.getElementById(id);
   var inp = m.querySelector('input, button, select, textarea');
   if (inp) setTimeout(function() { inp.focus(); }, 100);
 }
 function closeModal(id) {
   document.getElementById(id).classList.add('hidden');
+}
+
+// ─── Toggle advanced fields ───
+function toggleAdvanced() {
+  var el = document.getElementById('advancedFields');
+  var btn = document.getElementById('advToggle');
+  if (el.classList.contains('hidden')) {
+    el.classList.remove('hidden'); btn.textContent = '- Less options';
+  } else {
+    el.classList.add('hidden'); btn.textContent = '+ More options';
+  }
 }
 
 // Close modals on Escape

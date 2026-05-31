@@ -218,6 +218,7 @@ async def upload_mixtape(
     cover: UploadFile = File(None),
     notify_email: str = Form(""),
     from_name: str = Form(""),
+    note: str = Form(""),
 ):
     """Create a new mixtape from uploaded files. Accepts audio files, zip, or cover."""
     safe_name = sanitize_filename(name)
@@ -320,7 +321,7 @@ async def upload_mixtape(
     if expiration > 0:
         expires_at = int(time.time()) + (expiration * 86400)
 
-    create_share(share_id, name, folder, passcode, cover_path, accent_color, expires_at, from_name)
+    create_share(share_id, name, folder, passcode, cover_path, accent_color, expires_at, from_name, note)
     set_tracks(share_id, tracks)
 
     # Send email notification if requested
@@ -563,6 +564,11 @@ async def download_zip(share_id: str):
                 zf.writestr("from.txt", from_name)
             else:
                 zf.writestr("from.txt", "mixtape")
+
+            # Add note.txt
+            note = share.get("note", "").strip()
+            if note:
+                zf.writestr("note.txt", note)
 
             # Add playlist.m3u
             m3u_lines = ["#EXTM3U"]
