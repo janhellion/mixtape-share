@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mixtape Share — Dashboard</title>
+<title>Mixtape — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Coda:wght@400;800&display=swap" rel="stylesheet">
@@ -11,7 +11,7 @@
 </head>
 <body class="dashboard">
   <header>
-    <h1>📼 Mixtape Share</h1>
+    <h1>📼 Mixtape</h1>
     <div class="header-actions">
       <span id="serverStatus" class="status-dot">●</span>
       <span style="font-size:0.8rem;color:var(--text-muted);">{{ user.username }}</span>
@@ -86,8 +86,9 @@
       <div class="list-header">
         <span class="col-name">Mixtape</span>
         <span class="col-tracks">Tracks</span>
-        <span class="col-downloads">Downloads</span>
-        <span class="col-created">Created</span>
+        <span class="col-downloads">DL</span>
+        <span class="col-created">Expiry</span>
+        <span class="col-link">Link</span>
         <span class="col-actions">Actions</span>
       </div>
       <div id="shareItems">
@@ -112,6 +113,13 @@
             {%- else -%}
               {{ share.created_at | int | timestamp_to_date }}
             {%- endif -%}
+          </span>
+          <span class="col-created"><!-- short link column -->
+            {% if short_codes[share.id] %}
+            <a href="/s/{{ short_codes[share.id] }}" style="color:var(--text-muted);text-decoration:none;font-size:0.75rem;font-family:monospace;" target="_blank">/s/{{ short_codes[share.id] }}</a>
+            {% else %}
+            <span style="color:var(--text-muted);font-size:0.75rem;">—</span>
+            {% endif %}
           </span>
           <span class="col-actions">
             <button onclick="copyLink('{{ base_url }}/share/{{ share.id }}')" title="Copy link">
@@ -206,10 +214,13 @@
     <button onclick="generateInvite()" class="btn-primary" style="font-size:0.8rem;margin-bottom:0.8rem;">+ Generate Code</button>
     <div id="inviteList" style="font-size:0.8rem;">
       {% for c in invite_codes %}
-      <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid var(--border);">
-        <code style="font-family:monospace;">{{ c.code }}</code>
-        <span style="color:var(--text-muted);">
-          {% if c.used_by %}Used by {{ c.used_by_name }}{% else %}<span style="color:var(--success);">Available</span>{% endif %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid var(--border);">
+        <code style="font-family:monospace;font-size:0.75rem;">{{ c.code }}</code>
+        <span style="display:flex;align-items:center;gap:0.5rem;">
+          <span style="color:var(--text-muted);font-size:0.75rem;">
+            {% if c.used_by %}<span style="color:var(--text-muted);">Used by <strong>{{ c.used_by_name }}</strong></span>{% else %}<span style="color:var(--success);">Available</span>{% endif %}
+          </span>
+          <button onclick="deleteInvite('{{ c.code }}')" class="btn-danger" style="padding:0.15rem 0.4rem;font-size:0.7rem;">✕</button>
         </span>
       </div>
       {% endfor %}
@@ -218,9 +229,14 @@
     <h3 style="font-weight:800;font-size:0.9rem;margin:1rem 0 0.5rem;">Users</h3>
     <div style="font-size:0.8rem;">
       {% for u in users %}
-      <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid var(--border);">
         <span>{{ u.username }}{% if u.is_admin %} <span style="color:var(--accent);">(admin)</span>{% endif %}</span>
-        <span style="color:var(--text-muted);">{{ u.created_at | timestamp_to_date }}</span>
+        <span style="display:flex;align-items:center;gap:0.5rem;">
+          <span style="color:var(--text-muted);font-size:0.7rem;">{{ u.created_at | timestamp_to_date }}</span>
+          {% if u.username != user.username %}
+          <button onclick="deleteUser({{ u.id }}, '{{ u.username }}')" class="btn-danger" style="padding:0.15rem 0.4rem;font-size:0.7rem;">✕</button>
+          {% endif %}
+        </span>
       </div>
       {% endfor %}
     </div>
@@ -250,6 +266,20 @@ async function generateInvite() {
   var r = await fetch('/api/admin/invites', {method:'POST'});
   var d = await r.json();
   if (d.code) { location.reload(); }
+}
+
+async function deleteInvite(code) {
+  if (!confirm('Delete invite code ' + code + '?')) return;
+  await fetch('/api/admin/invites/' + code, {method:'DELETE'});
+  location.reload();
+}
+
+async function deleteUser(id, username) {
+  if (!confirm('Delete user "' + username + '"? This cannot be undone.')) return;
+  var r = await fetch('/api/admin/users/' + id, {method:'DELETE'});
+  var d = await r.json();
+  if (d.error) { alert(d.error); }
+  else { location.reload(); }
 }
 
 function showQR(url) {

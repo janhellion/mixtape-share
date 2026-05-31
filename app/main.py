@@ -53,7 +53,7 @@ def send_email(to_email, subject, html_body):
 os.makedirs(MEDIA_DIR, exist_ok=True)
 os.makedirs(COVERS_DIR, exist_ok=True)
 
-app = FastAPI(title="Mixtape Share", version="1.0")
+app = FastAPI(title="Mixtape", version="1.0")
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 # Register custom template filters
@@ -176,12 +176,19 @@ async def dashboard(request: Request):
     if not user:
         return RedirectResponse(url="/login")
     shares = get_all_shares()
+    # Get short codes for all shares
+    short_codes = {}
+    for s in shares:
+        codes = get_short_links_for_share(s["id"])
+        if codes:
+            short_codes[s["id"]] = codes[0]
     is_admin = is_admin_user(user["id"])
     invites = get_invite_codes() if is_admin else []
     users_list = get_all_users() if is_admin else []
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "shares": shares,
+        "short_codes": short_codes,
         "base_url": BASE_URL,
         "user": user,
         "is_admin": is_admin,
@@ -257,6 +264,10 @@ async def upload_mixtape(
     create_share(share_id, name, folder, passcode, cover_path, accent_color, expires_at, from_name)
     set_tracks(share_id, tracks)
 
+    # Create short link
+    short_code = create_short_link(share_id)
+    short_url = f"{BASE_URL}/s/{short_code}"
+
     # Send email notification if requested
     if notify_email:
         share_url = f"{BASE_URL}/share/{share_id}"
@@ -276,11 +287,12 @@ async def upload_mixtape(
         <ul style="list-style:none;padding:0;">{track_list_html}</ul>
         <p style="color:#888;font-size:0.8rem;margin-top:16px;">Sent via mixtape.janhellion.com</p>
         </div>"""
-        send_email(notify_email, f"📼 {name} — A mixtape for you", email_html)
+        send_email(notify_email, f"📼 {name} — Un mixtape para ti", email_html)
 
     return JSONResponse({
         "id": share_id,
         "url": f"{BASE_URL}/share/{share_id}",
+        "short_url": short_url,
         "tracks": len(tracks),
     })
 
@@ -291,6 +303,8 @@ async def list_shares():
     result = []
     for s in shares:
         expired = s["expires_at"] > 0 and s["expires_at"] < time.time()
+        short_codes = get_short_links_for_share(s["id"])
+        short_code = short_codes[0] if short_codes else ""
         result.append({
             "id": s["id"],
             "name": s["name"],
@@ -301,6 +315,7 @@ async def list_shares():
             "track_count": s["track_count"],
             "cover_path": s.get("cover_path", ""),
             "accent_color": s.get("accent_color", ""),
+            "short_code": short_code,
             "url": f"{BASE_URL}/share/{s['id']}",
         })
     return JSONResponse(result)
@@ -474,11 +489,12 @@ async def download_zip(share_id: str):
 
     safe_name = re.sub(r"[^\w\s-]", "", share["name"]).strip().replace(" ", "_")
 
-    # Build ZIP with a temp file to avoid memory issues
+    # Build ZIP with a temp file — use STORED since FLAC/MP3 are already compressed
+    zip_mode = zipfile.ZIP_STORED
     import tempfile
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
     try:
-        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(tmp, "w", zip_mode) as zf:
             # Add audio files
             for t in tracks:
                 fp = os.path.join(folder, t["filename"])
@@ -495,7 +511,7 @@ async def download_zip(share_id: str):
             if from_name:
                 zf.writestr("from.txt", from_name)
             else:
-                zf.writestr("from.txt", "mixtape.janhellion.com")
+                zf.writestr("from.txt", "mixtape")
 
             # Add playlist.m3u
             m3u_lines = ["#EXTM3U"]
@@ -548,6 +564,18 @@ async def log_play_event(share_id: str, track_id: int, request: Request):
     ip = request.client.host if request.client else ""
     log_play(track_id, ip)
     return JSONResponse({"ok": True})
+
+
+@app.get("/s/{code}")
+async def short_link_redirect(request: Request, code: str):
+    """Redirect a short link to the full share page."""
+    share_id = get_short_link(code)
+    if not share_id:
+        return templates.TemplateResponse("player.html", {
+            "request": request, "share": None, "tracks": [],
+            "base_url": BASE_URL, "error": "Link not found",
+        })
+    return RedirectResponse(url=f"/share/{share_id}")
 
 
 @app.get("/share/{share_id}", response_class=HTMLResponse)
@@ -666,6 +694,37 @@ async def api_create_invite(request: Request):
         raise HTTPException(401)
     code = create_invite_code(user["id"])
     return JSONResponse({"code": code})
+
+
+@app.delete("/api/admin/invites/{code}")
+async def api_delete_invite(request: Request, code: str):
+    token = request.cookies.get("session", "")
+    user = get_user_by_session(token)
+    if not user or not is_admin_user(user["id"]):
+        raise HTTPException(401)
+    conn = get_conn()
+    conn.execute("DELETE FROM invitation_codes WHERE code = ?", (code,))
+    conn.commit()
+    conn.close()
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def api_delete_user(request: Request, user_id: int):
+    token = request.cookies.get("session", "")
+    admin = get_user_by_session(token)
+    if not admin or not is_admin_user(admin["id"]):
+        raise HTTPException(401)
+    # Prevent self-deletion
+    if admin["id"] == user_id:
+        return JSONResponse({"error": "Cannot delete yourself"}, status_code=400)
+    conn = get_conn()
+    conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM invitation_codes WHERE used_by = ?", (user_id,))
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return JSONResponse({"ok": True})
 
 
 @app.get("/api/admin/users")
