@@ -60,11 +60,11 @@
           <h1 id="mixtapeName">{{ share.name if share else '' }}</h1>
           <p class="track-count" id="mixtapeMeta">{{ tracks|length }} tracks</p>
           <div class="led-scroll" id="ledDisplay">
-            <span class="led-text" id="ledText">
-              {% if tracks %}
-              ▶ {{ tracks[0].artist }} — {{ tracks[0].album or tracks[0].title }}{% if tracks[0].year %} ({{ tracks[0].year }}){% endif %}
-              {% endif %}
-            </span>
+          <span class="led-text" id="ledText">
+            {% if tracks %}
+            ♪ {{ tracks[0].title }}  ─  {{ tracks[0].artist }}{% if tracks[0].album %}  ─  {{ tracks[0].album }}{% endif %}{% if tracks[0].year %} ({{ tracks[0].year }}){% endif %}
+            {% endif %}
+          </span>
           </div>
           <a href="/api/download/{{ share.id }}" class="download-btn" onclick="trackDownload()" style="margin-top:0.5rem;display:inline-block;">⬇ Download Tape</a>
         </div>
@@ -130,14 +130,14 @@ var audio = document.getElementById('audioPlayer');
 function updateLedDisplay(index) {
   var t = tracks[index];
   if (!t) return;
-  var text = '▶ ' + (t.artist || 'Unknown') + ' — ' + (t.album || t.title || '');
-  if (t.year) text += ' (' + t.year + ')';
+  var text = '♪ ' + (t.title || '') + '  ─  ' + (t.artist || 'Unknown');
+  if (t.album) text += '  ─  ' + t.album;
+  if (t.year) text += '  (' + t.year + ')';
   var el = document.getElementById('ledText');
   if (el) el.textContent = text;
   // Restart marquee animation by reinserting
   var parent = el.parentNode;
   parent.removeChild(el);
-  // Force reflow
   void el.offsetWidth;
   parent.appendChild(el);
 }

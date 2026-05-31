@@ -32,7 +32,7 @@
         <form id="uploadForm" onsubmit="uploadMixtape(event)">
           <div class="form-group">
             <label>Mixtape Name</label>
-            <input type="text" name="name" required placeholder="Summer Vibes 2026..." autofocus>
+            <input type="text" name="name" placeholder="Leave empty to auto-name from album">
           </div>
           <div class="form-group">
             <label>Cover Image (optional)</label>
@@ -175,7 +175,9 @@
         {% endfor %}
         {% if shares|length == 0 %}
         <div class="empty-state">
-          <p>No mixtapes yet. Click "+ New Mixtape" to create your first one.</p>
+          <p style="font-size:1.2rem;margin-bottom:0.5rem;">📼</p>
+          <p>No mixtapes yet</p>
+          <p style="font-size:0.8rem;color:var(--text-muted);">Click <strong>"+ New Mixtape"</strong> to create your first one — drop audio files or a folder, add a cover, and share the link.</p>
         </div>
         {% endif %}
       </div>
@@ -195,6 +197,20 @@
   <footer>
     <p>mixtape.janhellion.com</p>
   </footer>
+
+<!-- Toast container -->
+<div id="toastContainer" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999;display:flex;flex-direction:column;gap:0.5rem;"></div>
+
+<!-- Confirmation dialog -->
+<div id="confirmModal" class="modal hidden">
+  <div class="modal-content" style="max-width:340px;text-align:center;">
+    <p id="confirmMsg" style="margin-bottom:1.2rem;font-size:0.95rem;"></p>
+    <div style="display:flex;gap:0.5rem;justify-content:center;">
+      <button id="confirmCancel" class="btn-outline" style="font-size:0.85rem;">Cancel</button>
+      <button id="confirmOk" class="btn-primary" style="font-size:0.85rem;background:var(--danger);">Delete</button>
+    </div>
+  </div>
+</div>
 
 <!-- Admin Modal -->
 <div id="adminModal" class="modal hidden">
@@ -236,6 +252,38 @@
 </div>
 
 <script>
+// ─── Toast System ───
+function toast(msg, type) {
+  var t = document.getElementById('toastContainer');
+  var el = document.createElement('div');
+  var bg = type === 'error' ? '#D0021B' : type === 'success' ? '#6ECA09' : type === 'info' ? '#403d39' : '#252422';
+  el.style.cssText = 'background:' + bg + ';color:#fff;padding:0.6rem 1rem;border-radius:4px;font-size:0.82rem;box-shadow:0 4px 12px rgba(0,0,0,0.15);animation:toast-in 0.25s ease;cursor:pointer;';
+  el.textContent = msg;
+  el.onclick = function() { remove(el); };
+  t.appendChild(el);
+  setTimeout(function() { remove(el); }, 3500);
+}
+function remove(el) {
+  if (el.parentNode) { el.style.animation = 'toast-out 0.2s ease'; setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 200); }
+}
+// Inject toast keyframes
+var s = document.createElement('style');
+s.textContent = '@keyframes toast-in{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}@keyframes toast-out{0%{opacity:1}100%{opacity:0}}';
+document.head.appendChild(s);
+
+// ─── Custom Confirm ───
+function customConfirm(msg) {
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('confirmModal');
+    var msgEl = document.getElementById('confirmMsg');
+    msgEl.textContent = msg;
+    modal.classList.remove('hidden');
+    document.getElementById('confirmOk').onclick = function() { modal.classList.add('hidden'); resolve(true); };
+    document.getElementById('confirmCancel').onclick = function() { modal.classList.add('hidden'); resolve(false); };
+    // Close on outside click
+    modal.onclick = function(e) { if (e.target === modal) { modal.classList.add('hidden'); resolve(false); } };
+  });
+}
 function previewCover(e) {
   var file = e.target.files[0];
   if (file) {
@@ -261,17 +309,18 @@ async function generateInvite() {
 }
 
 async function deleteInvite(code) {
-  if (!confirm('Delete invite code ' + code + '?')) return;
+  if (!await customConfirm('Delete invite code ' + code + '?')) return;
   await fetch('/api/admin/invites/' + code, {method:'DELETE'});
+  toast('Invite code deleted', 'info');
   location.reload();
 }
 
 async function deleteUser(id, username) {
-  if (!confirm('Delete user "' + username + '"? This cannot be undone.')) return;
+  if (!await customConfirm('Delete user "' + username + '"? This cannot be undone.')) return;
   var r = await fetch('/api/admin/users/' + id, {method:'DELETE'});
   var d = await r.json();
-  if (d.error) { alert(d.error); }
-  else { location.reload(); }
+  if (d.error) { toast(d.error, 'error'); }
+  else { toast('User deleted', 'info'); location.reload(); }
 }
 
 function showQR(url) {
@@ -369,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function copyLink(url) {
   navigator.clipboard.writeText(url).then(function() {
-    var btn = event.target; btn.textContent = '✓'; setTimeout(function() { btn.textContent = '🔗'; }, 2000);
+    toast('Link copied to clipboard', 'success');
   });
 }
 
@@ -391,16 +440,17 @@ async function uploadMixtape(e) {
   try {
     var r = await fetch('/api/upload', { method: 'POST', body: fd });
     var d = await r.json();
-    if (d.error) { alert('Error: ' + d.error); return; }
-    location.reload();
-  } catch(err) { alert('Upload failed: ' + err); }
+    if (d.error) { toast(d.error, 'error'); btn.disabled = false; prog.classList.add('hidden'); return; }
+    toast('Mixtape created!', 'success');
+    setTimeout(function() { location.reload(); }, 800);
+  } catch(err) { toast('Upload failed: ' + err, 'error'); }
   finally { btn.disabled = false; prog.classList.add('hidden'); }
 }
 
 async function deleteShare(id) {
-  if (!confirm('Delete this mixtape permanently?')) return;
-  await fetch('/api/share/' + id, { method: 'DELETE' });
-  document.querySelector('[data-id="' + id + '"]').remove();
+  if (!await customConfirm('Delete this mixtape permanently?')) return;
+  var r = await fetch('/api/share/' + id, { method: 'DELETE' });
+  if (r.ok) { toast('Mixtape deleted', 'info'); document.querySelector('[data-id="' + id + '"]').remove(); }
 }
 
 // Refresh status

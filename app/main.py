@@ -260,12 +260,53 @@ async def upload_mixtape(
         shutil.rmtree(folder, ignore_errors=True)
         return JSONResponse({"error": "No audio files found"}, status_code=400)
 
-    # Auto-name from first track's album + artist if name is generic
-    if not name or name.strip() == "" or name == "Mixtape":
+    # Auto-name from first track's album + artist
+    if not name or name.strip() == "":
         first = tracks[0]
         name = first.get("album", "") or first.get("title", "Mixtape")
         if first.get("artist", "Unknown") != "Unknown":
             name = f"{name} — {first['artist']}"
+
+    # Extract embedded cover art from first audio file if no cover uploaded
+    if not cover_path and tracks:
+        first_file = os.path.join(folder, tracks[0]["filename"])
+        if os.path.isfile(first_file):
+            try:
+                mfile = mutagen.File(first_file)
+                if mfile is not None:
+                    pics = []
+                    # FLAC pictures
+                    if hasattr(mfile, "pictures") and mfile.pictures:
+                        pics = mfile.pictures
+                    # MP3 APIC frames
+                    elif hasattr(mfile, "tags") and mfile.tags:
+                        for tag in mfile.tags.values():
+                            if hasattr(tag, "encoding") and hasattr(tag, "data") and hasattr(tag, "mime"):
+                                pics.append(tag)
+                            elif hasattr(tag, "type") and tag.type == 3:  # APIC
+                                pics.append(tag)
+
+                    if pics:
+                        pic = pics[0]
+                        img_data = pic.data if hasattr(pic, "data") else (pic if isinstance(pic, bytes) else b"")
+                        if img_data:
+                            # Detect format from MIME or magic bytes
+                            mime = getattr(pic, "mime", "") if hasattr(pic, "mime") else ""
+                            if "png" in mime:
+                                ext = "png"
+                            elif "gif" in mime:
+                                ext = "gif"
+                            elif "jpeg" in mime or "jpg" in mime:
+                                ext = "jpg"
+                            else:
+                                ext = "jpg"
+                            cover_name = f"{share_id}_cover.{ext}"
+                            cover_full = os.path.join(COVERS_DIR, cover_name)
+                            with open(cover_full, "wb") as cf:
+                                cf.write(img_data)
+                            cover_path = f"/api/cover/{cover_name}"
+            except Exception:
+                pass
 
     # Extract dominant color from cover for player theming
     accent_color = ""

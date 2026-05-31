@@ -2,20 +2,76 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #fffcf2;
-  --bg-card: #f8f5ed;
-  --bg-hover: #efece3;
-  --border: #ccc5b9;
-  --text: #252422;
-  --text-muted: #403d39;
-  --primary: #252422;
-  --primary-hover: #403d39;
-  --accent: #eb5e28;
+  /* ─── M3 Color Roles ─── */
+  --md-primary: #eb5e28;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #ffe4d5;
+  --md-on-primary-container: #421400;
+  --md-secondary: #6b5e55;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #f3e2d6;
+  --md-on-secondary-container: #241b15;
+  --md-tertiary: #556b48;
+  --md-on-tertiary: #ffffff;
+  --md-tertiary-container: #d8f3c6;
+  --md-on-tertiary-container: #13250a;
+  --md-surface: #fffcf2;
+  --md-on-surface: #252422;
+  --md-surface-variant: #f3ede3;
+  --md-on-surface-variant: #4c463b;
+  --md-outline: #ccc5b9;
+  --md-outline-variant: #ddd6c9;
+  --md-error: #D0021B;
+  --md-on-error: #ffffff;
+  --md-error-container: #ffdad6;
+  --md-on-error-container: #410002;
+
+  /* ─── Glass Tokens (Liquid Glass) ─── */
+  --glass-bg: rgba(255,255,255,0.25);
+  --glass-bg-strong: rgba(255,255,255,0.45);
+  --glass-bg-light: rgba(255,255,255,0.12);
+  --glass-border: rgba(255,255,255,0.45);
+  --glass-border-light: rgba(255,255,255,0.18);
+  --glass-blur: blur(24px);
+  --glass-blur-sm: blur(12px);
+  --glass-shadow: 0 2px 8px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.06);
+  --glass-shadow-lg: 0 4px 16px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.08);
+
+  /* ─── M3 Shape Scale ─── */
+  --shape-sm: 4px;
+  --shape-md: 8px;
+  --shape-lg: 12px;
+  --shape-xl: 16px;
+  --shape-full: 9999px;
+
+  /* ─── M3 Elevation ─── */
+  --elevation-0: none;
+  --elevation-1: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+  --elevation-2: 0 2px 8px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.05);
+  --elevation-3: 0 4px 16px rgba(0,0,0,0.05), 0 8px 32px rgba(0,0,0,0.06);
+  --elevation-4: 0 8px 24px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.08);
+  --elevation-5: 0 12px 40px rgba(0,0,0,0.08), 0 24px 64px rgba(0,0,0,0.10);
+
+  /* ─── M3 Motion ─── */
+  --motion-stand: cubic-bezier(0.2, 0, 0, 1);
+  --motion-accel: cubic-bezier(0.4, 0, 1, 1);
+  --motion-decel: cubic-bezier(0, 0, 0.2, 1);
+
+  /* ─── Legacy Aliases ─── */
+  --bg: var(--md-surface);
+  --bg-card: var(--md-surface-variant);
+  --bg-hover: var(--md-outline-variant);
+  --border: var(--md-outline);
+  --text: var(--md-on-surface);
+  --text-muted: var(--md-on-surface-variant);
+  --primary: var(--md-primary);
+  --primary-hover: #d44d1a;
+  --accent: var(--md-primary);
   --accent-hover: #d44d1a;
-  --danger: #D0021B;
+  --danger: var(--md-error);
   --success: #6ECA09;
-  --radius: 4px;
-  --radius-sm: 2px;
+  --radius: var(--shape-sm);
+  --radius-sm: var(--shape-sm);
   --font: 'Coda', 'Jersey 10', 'Hind', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -217,12 +273,13 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
 }
 .error-state h1, .passcode-screen h1 { font-size: 3.5rem; margin-bottom: 1rem; }
 .passcode-box {
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: var(--radius); padding: 2rem; max-width: 320px;
-  margin: 0 auto; box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: var(--shape-md);
+  padding: 2rem; max-width: 320px;
+  margin: 0 auto; box-shadow: var(--glass-shadow);
 }
 .passcode-box h2 { font-size: 1.15rem; margin-bottom: 0.4rem; font-weight: 800; }
 .passcode-box p { color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.85rem; }
@@ -240,13 +297,13 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
 .player-header {
   display: flex; gap: 1rem; align-items: center;
   margin-bottom: 1rem;
-  background: rgba(255,255,255,0.35);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255,255,255,0.5);
-  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: var(--shape-md);
   padding: 1.2rem;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  box-shadow: var(--glass-shadow);
 }
 .player-cover {
   width: 90px; height: 90px; border-radius: 4px;
@@ -270,9 +327,11 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
   width: 100%;
   height: 1.4rem;
   overflow: hidden;
-  background: #0a0a0a;
-  border-radius: 2px;
-  box-shadow: inset 0 0 4px rgba(0,0,0,0.3);
+  background: rgba(37,36,34,0.2);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--shape-sm);
   position: relative;
   white-space: nowrap;
 }
@@ -281,30 +340,30 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
   padding: 0.15rem 0 0 1.5rem;
   font-family: 'Courier New', 'Consolas', monospace;
   font-size: 0.72rem;
-  color: #4ade80;
-  letter-spacing: 0.08em;
-  text-shadow: 0 0 4px rgba(74,222,128,0.5);
-  animation: led-scroll 18s linear infinite;
+  color: #eb5e28;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 6px rgba(235,94,40,0.4);
+  animation: led-scroll 20s linear infinite;
   white-space: nowrap;
 }
 @keyframes led-scroll {
   0% { transform: translateX(100%); }
-  10% { transform: translateX(0); }
-  85% { transform: translateX(0); }
+  8% { transform: translateX(0); }
+  88% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
 }
 
 /* ─── Audio Player Bar (Y2K Glass) ─── */
 .audio-player-bar {
   display: flex; align-items: center; gap: 0.5rem;
-  background: rgba(255,255,255,0.35);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255,255,255,0.5);
-  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: var(--shape-md);
   padding: 0.65rem 0.85rem;
   margin-bottom: 1rem;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  box-shadow: var(--glass-shadow);
 }
 .control-btn {
   background: rgba(255,255,255,0.5);
@@ -358,13 +417,13 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
 /* ─── Tracklist (Y2K Glass) ─── */
 .tracklist {
   margin-bottom: 1rem;
-  background: rgba(255,255,255,0.3);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.4);
-  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: var(--shape-md);
   overflow: hidden;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.03);
+  box-shadow: var(--glass-shadow);
 }
 .track-item {
   display: flex; align-items: center; gap: 0.7rem;
@@ -418,20 +477,22 @@ main { max-width: 960px; margin: 0 auto; padding: 2rem; }
 .player-footer { text-align: center; }
 .download-btn {
   display: inline-block; padding: 0.6rem 1.4rem;
-  background: rgba(255,255,255,0.35);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.4);
-  border-radius: var(--radius-sm);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: var(--shape-sm);
   color: var(--text);
   text-decoration: none; font-size: 0.85rem;
   transition: all 0.2s;
   font-family: var(--font);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+  box-shadow: var(--elevation-1);
 }
 .download-btn:hover {
-  background: rgba(255,255,255,0.6);
-  border-color: rgba(255,255,255,0.6);
+  background: var(--md-primary);
+  border-bottom-color: var(--md-primary);
+  color: var(--md-on-primary);
+  box-shadow: var(--elevation-2);
   transform: translateY(-1px);
 }
 
@@ -469,25 +530,25 @@ footer { text-align: center; padding: 1.5rem; color: var(--text-muted); font-siz
     gap: 1.2rem;
     justify-content: center;
     align-items: center;
-    background: rgba(255,255,255,0.25);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255,255,255,0.4);
-    border-radius: var(--radius);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-border);
+    border-radius: var(--shape-md);
     padding: 2rem;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+    box-shadow: var(--glass-shadow);
   }
   .player-right {
     flex: 1 1 60%;
     overflow-y: auto;
     min-height: 0;
-    background: rgba(255,255,255,0.25);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255,255,255,0.4);
-    border-radius: var(--radius);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-border);
+    border-radius: var(--shape-md);
     padding: 1rem;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+    box-shadow: var(--glass-shadow);
   }
 
   /* Big album art stacked above info */
