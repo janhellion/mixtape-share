@@ -95,23 +95,37 @@ def scan_audio(dir_path):
             duration = int(mfile.info.length) if mfile and mfile.info else 0
             title = ""
             artist = ""
+            album = ""
+            year = ""
             tags = getattr(mfile, "tags", None)
 
             if tags is not None:
                 if isinstance(tags, dict):
                     title = tags.get("title", [""])[0] if tags.get("title") and tags["title"][0] else ""
                     artist = tags.get("artist", [""])[0] if tags.get("artist") and tags["artist"][0] else ""
+                    album = tags.get("album", [""])[0] if tags.get("album") and tags["album"][0] else ""
+                    year = tags.get("date", [""])[0] if tags.get("date") and tags["date"][0] else ""
                 elif hasattr(tags, "get"):
                     title = tags.get("title", "")
                     artist = tags.get("artist", "")
+                    album = tags.get("album", "")
+                    year = tags.get("date", "")
 
             # Normalize: tags often return lists like ['Los Tres']
-            if isinstance(title, list):
-                title = str(title[0]) if title else ""
-            if isinstance(artist, list):
-                artist = str(artist[0]) if artist else ""
-            title = str(title) if title else ""
-            artist = str(artist) if artist else ""
+            for _field in ["title", "artist", "album", "year"]:
+                _val = {"title": title, "artist": artist, "album": album, "year": year}[_field]
+                if isinstance(_val, list):
+                    _val = str(_val[0]) if _val else ""
+                else:
+                    _val = str(_val) if _val else ""
+                if _field == "title": title = _val
+                elif _field == "artist": artist = _val
+                elif _field == "album": album = _val
+                elif _field == "year": year = _val
+
+            # Year might be a full date like "1999-01-01" — extract just the year
+            if year and len(year) >= 4:
+                year = year[:4]
 
             if not title:
                 title = f.stem
@@ -122,6 +136,8 @@ def scan_audio(dir_path):
                 "filename": f.name,
                 "title": title,
                 "artist": artist,
+                "album": album,
+                "year": year,
                 "duration": duration,
             })
         except Exception as e:
@@ -129,6 +145,8 @@ def scan_audio(dir_path):
                 "filename": f.name,
                 "title": f.stem,
                 "artist": "Unknown",
+                "album": "",
+                "year": "",
                 "duration": 0,
             })
     return tracks
@@ -241,6 +259,13 @@ async def upload_mixtape(
     if not tracks:
         shutil.rmtree(folder, ignore_errors=True)
         return JSONResponse({"error": "No audio files found"}, status_code=400)
+
+    # Auto-name from first track's album + artist if name is generic
+    if not name or name.strip() == "" or name == "Mixtape":
+        first = tracks[0]
+        name = first.get("album", "") or first.get("title", "Mixtape")
+        if first.get("artist", "Unknown") != "Unknown":
+            name = f"{name} — {first['artist']}"
 
     # Extract dominant color from cover for player theming
     accent_color = ""
